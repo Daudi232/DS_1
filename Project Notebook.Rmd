@@ -1,0 +1,433 @@
+---
+title: "STATISTICS PROJECT"
+output: html_notebook
+---
+
+### PRINCIPAL COMPONENT ANALYSIS
+```{r}
+library ('readr')
+
+## LOAD DATA FOR EXAMPLE 1
+
+houses = read_csv ('/media/work/MSc Data Science/Statistics/Statistics Lab/Practice Data/House Prices/house_prices_numerical.csv', show_col_types = FALSE)
+
+# Drop ID
+# SalePrice was used to generate SaleCatg so it won't be needed in further analysis
+houses = houses [, -c(1, 31)]
+
+# The dataset now has a sample of 1120 houses with 33 features
+head (houses)
+```
+
+```{r}
+sapply (houses [, -33], sd) # Scales are different, so we will use the correlation matrix for PCA
+
+# PCA for houses
+houses_pca = princomp (houses [, -33], cor = T) # Exclude the Sales Price and Sales Price Category
+
+summary (houses_pca, loadings = T)
+```
+
+```{r}
+## How many Principal Components should we use??
+
+# Scree-Plot
+
+screeplot (houses_pca, npcs = 32, type = 'lines', pch = 16, cex = 1, lwd = 1, 
+           col = 'blue', main = 'Scree Plot of Principal Components')
+
+screeplot (houses_pca, npcs = 32, type = 'barplot',
+           main = 'Scree Plot of Principal Components', col = 'blue')
+
+
+## Kaissers Rule. Suggests we take first 10 PCs
+## 10 Principal components explain 66% of total variance. Not Enough!!
+houses_pca$sdev^2 >= 1
+
+## Modified Kaissers Rule suggests we take first 16 PCs
+## 16 Principal components explain 84.5% of total variance
+## We will therefore use 16 Principal components in further analysis
+houses_pca$sdev^2 >= 0.7
+```
+
+
+```{r}
+## LOAD DATA FOR EXAMPLE 2
+
+# Scores of students in a Calculus course in the University of Dar es salaam
+
+mt_171 = read_csv ('/media/work/MSc Data Science/Statistics/Statistics Lab/Labs/Project/MT_171_2023.csv', show_col_types = FALSE)
+
+head (mt_171)
+
+# The dataset has a sample of 914 student scores with 9 features
+mt_171 = mt_171 [, -c(1, 2, 7)] # I won't need them for my analysis
+```
+```{r}
+
+# Alternative call for PCA
+mt_171_pca = prcomp (mt_171 [, -c(5, 6)], center = TRUE, scale. = TRUE) # Scales are different, so we standardize
+
+summary (mt_171_pca)
+
+loadings_mt = mt_171_pca$rotation
+print (loadings_mt)
+```
+```{r}
+library(factoextra) # for visualizations
+
+# Biplot
+fviz_pca_biplot(mt_171_pca, 
+                repel = TRUE,   
+                col.var = "blue", 
+                col.ind = "red")
+
+# Scree-Plot
+fviz_eig (mt_171_pca, addlabels = TRUE, ylim = c(0, 70))
+
+# Kaissers rule
+mt_171_pca$sdev^2 >= 1 # suggests we pick 1 PC
+
+# Modified kaissers rule
+mt_171_pca$sdev^2 >= 0.7 # also suggests we pick 1 PC
+
+# I will use 3 PCs in my further analysis instead of 1, because 3 explain 91% of the variance in data, which is enough!
+
+```
+### MULTI-DIMENSIONAL SCALING
+
+We want to visualize the locations of European stadiums in 2D and 3D
+```{r}
+
+stadiums = read_csv ('/media/work/MSc Data Science/Data Visualization/Bookeh Learning/Football/updated_clubs_with_coordinates_country_3.csv', show_col_types = FALSE)
+
+# Remove duplicate stadium
+stadiums_location = stadiums [-c(6, 11), c ('stadium_name', 'latitude', 'longitude', 'country_name')]
+
+# Select top 30 stadiums
+stadiums_location = stadiums_location [c(1:30),]
+
+head (stadiums_location)
+
+```
+
+
+```{r}
+# Haversine formula for calculating the distance between two cities (in kilometers)
+
+haversine_distance <- function(lat1, lon1, lat2, lon2) {
+  R <- 6371  # Earth's radius in km
+  phi1 <- lat1 * pi / 180
+  phi2 <- lat2 * pi / 180
+  delta_phi <- (lat2 - lat1) * pi / 180
+  delta_lambda <- (lon2 - lon1) * pi / 180
+  
+  a <- sin(delta_phi / 2)^2 + cos(phi1) * cos(phi2) * sin(delta_lambda / 2)^2
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  d <- R * c
+  return(d)
+}
+
+# Calculating the distance matrix
+dist_matrix <- matrix(0, nrow = nrow(stadiums_location), ncol = nrow(stadiums_location))
+for (i in 1:(nrow(stadiums_location) - 1)) {
+  for (j in (i + 1):nrow(stadiums_location)) {
+    dist_matrix[i, j] <- haversine_distance(stadiums_location$latitude[i], stadiums_location$longitude[i], stadiums_location$latitude[j], stadiums_location$longitude[j])
+    dist_matrix[j, i] <- dist_matrix[i, j]
+  }
+}
+
+# Set row and column names
+rownames(dist_matrix) <- stadiums_location$stadium_name
+colnames(dist_matrix) <- stadiums_location$stadium_name
+
+dist_matrix [1:3, 1:3] # Subset of the distance matrix with 3 stadiums
+```
+
+
+```{r}
+## Classical Solution
+
+stadiums_cmds = cmdscale (dist_matrix, k =3, eig = T) # retain 3 dimensions
+
+stadiums_cmds$eig # The first 3 eigenvalues are all nicely positive
+
+a1k <- cumsum(abs(stadiums_cmds$eig))/sum(abs(stadiums_cmds$eig))
+
+# 99.4% of original distance is retained by 2 dimensions
+# 99.6% of original distance is retained by 3 dimensions
+print (a1k) 
+
+# 99.99% of original distance is retained by 2 and 3 dimensions
+a2k <- cumsum(stadiums_cmds$eig^2)/sum(stadiums_cmds$eig^2)
+print (a2k) # 99.99% of original distance is retained by 3 dimensions
+
+eucl_dist = dist (stadiums_cmds$points [, 1:3]) 
+
+#Sample of eucledian distances is identical to the distances computed by harvesine formula
+print (as.matrix (eucl_dist) [1:3, 1:3]) 
+
+```
+
+
+```{r}
+## Visualization of Classical solution in 2D
+
+plot(-stadiums_cmds$points[,1],stadiums_cmds$points[,2],xlab='X coordinate',ylab='Y coordinate',type='n', main = 'Map of Largest European Stadiums')
+
+text(-stadiums_cmds$points[,1],stadiums_cmds$points[,2],labels=colnames(dist_matrix), cex = 0.5, pos = c(2, 4, 4, 2))
+
+```
+```{r}
+
+## Visualization of Classical solution in 3D
+library('rgl')
+
+plot3d(-stadiums_cmds$points[,1],stadiums_cmds$points[,2],stadiums_cmds$points[,3],xlab='1st coordinate',
+       ylab='2nd  coordinate',zlab='3nd  coordinate',type='n')
+text3d(x= -stadiums_cmds$points[,1],y=stadiums_cmds$points[,2],z=stadiums_cmds$points[,3],texts=colnames(dist_matrix))
+
+rglwidget()
+```
+```{r}
+# Non Metric Solution
+
+library (MASS)
+
+stadiums_iso<-isoMDS(dist_matrix,k=3)
+stadiums_iso$stress
+```
+
+```{r}
+
+# Non-Metric Solution Visualization (Looks Identical to Classical Solution)
+
+plot(-stadiums_iso$points[,1],stadiums_iso$points[,2],xlab='X coordinate',ylab='Y coordinate',type='n')
+
+text(-stadiums_iso$points[,1],stadiums_iso$points[,2],labels=colnames(dist_matrix), cex = 0.6, pos = c(2, 4, 4, 2))
+
+```
+### CLUSTERING
+
+```{r}
+## Hopkins Test 
+library (hopkins)
+
+hop_stat = hopkins(mt_171_pca$x [, c(1, 2)])
+hopkins.pval(hop_stat, nrow (mt_171_pca$x)) #p value of 0 implies that the data is clustered in space
+
+
+## K-Means Clustering
+
+# Clustering using 3 PCs
+mt_clkm = kmeans (mt_171_pca$x [, c(1:3)], 2) # 2 clusters based on "pass" or "fail"
+# cluster 1 for pass group, 2 for fail group
+table (mt_clkm$cluster, mt_171$remark) # has a clustering accuracy of 92.45%
+
+# Clustering on 2 PCs
+mt_clkm_2 = kmeans (mt_171_pca$x [, c(1:2)], 2)
+
+# cluster 1 seems to be for fail group, 2 for pass group
+```
+
+
+```{r}
+table (mt_clkm_2$cluster, mt_171$remark) # roughly the same accuracy
+```
+
+```{r}
+# Visualizing the 2 PCs to observe the clusters formed
+plot (mt_171_pca$x [,1], mt_171_pca$x [,2], xlab = 'PC1', ylab = 'PC2', col = mt_clkm_2$cluster)
+
+points(mt_clkm_2$centers, col = c(3, 4), pch = 19, cex = 2)  # Marking cluster centers
+```
+```{r}
+
+# 3-D
+plot3d(mt_171_pca$x [,1], mt_171_pca$x [,2],mt_171_pca$scores [,3],xlab='PC1',
+       ylab='PC2',zlab='PC3', col = mt_clkm$cluster)
+rglwidget()
+```
+
+```{r}
+## How many clusters are best?
+
+# K Means of 1 to 10 clusters using 2 Principal Components of MT 171 data
+
+wcss <- numeric(10)
+for (i in 1:10) {
+  kmeans_result <- kmeans(mt_171_pca$x [, c(1:2)], centers = i)
+  wcss[i] <- kmeans_result$tot.withinss
+}
+
+# WCSS for the k =1 to 10 clusters
+print (wcss)
+
+# Elbow Plot
+plot(1:10, wcss, type = "b", pch = 19, col = "blue",
+     xlab = "Clusters", ylab = "Within Clusters Sum of Squares (WCSS)",
+     main = "Elbow Method")
+abline(v = 6, col = "red", lty = 'dashed')  
+
+```
+```{r}
+
+# Kmeans with 6 clusters using 2 Principal components (representative of grades)
+mt_clkm_6 = kmeans (mt_171_pca$x [, c(1:2)], 6)
+table (mt_clkm_6$cluster, mt_171$grade)
+
+# PLoting the 2 PCs to observe the 6 clusters
+plot (mt_171_pca$x [,1], mt_171_pca$x [,2], xlab = 'PC1', ylab = 'PC2', col = mt_clkm_6$cluster)
+points(mt_clkm_6$centers, col = c(7, 8, 9, 10), pch = 8, cex = 3)  # Marking cluster centers
+
+```
+```{r}
+# How good are the clusters formed by the 2 Principal components?
+
+library (cluster)
+
+sil_scores = silhouette(mt_clkm_2$cluster, dist (mt_171_pca$x [, c(1, 2)]))
+avg_sil_scores = mean (sil_scores[, 3])
+print (avg_sil_scores) # 0.43 is pretty decent. A negative value would have been bad!
+```
+
+
+```{r}
+## Hierarchichal clustering
+
+## Clustering using hierachichal
+
+dm_e <- dist(mt_171_pca$x [, 1:3]) # eucledian distances between the scores
+
+cl_e_s <- hclust(dm_e, method='single')
+cl_e_c <- hclust(dm_e, method='complete')
+cl_e_a <- hclust(dm_e, method='average')
+cl_e_cent <- hclust(dm_e, method='centroid')
+
+# select 2 clusters
+cut_e_s<-cutree(cl_e_s,k=2)
+cut_e_c<-cutree(cl_e_c,k=2)
+cut_e_a<-cutree(cl_e_a,k=2)
+cut_e_cent<-cutree(cl_e_cent,k=2)
+
+
+library('sparcl') # for visualizing colored dendrogram
+
+ColorDendrogram(cl_e_s, y = cut_e_s, labels= 1:nrow (mt_171_pca$x),main = "Single Link", 
+                branchlength = 3,xlab ='', sub='')
+ColorDendrogram(cl_e_c, y = cut_e_c, labels= 1:nrow (mt_171_pca$x),main = "Complete Link", 
+                branchlength = 3,xlab ='', sub='')
+ColorDendrogram(cl_e_a, y = cut_e_a, labels= 1:nrow (mt_171_pca$x),main = "Average Link", 
+                branchlength = 3,xlab ='', sub='')
+ColorDendrogram(cl_e_cent, y = cut_e_cent, labels= 1:nrow (mt_171_pca$x),main = "Centroid Link", 
+                branchlength = 3,xlab ='', sub='')
+```
+
+
+```{r}
+# Tables showing how clusters were formed
+
+table(mt_171$remark, cut_e_s)
+table(mt_171$remark,cut_e_c) # Looks to separate the clusters better as compared to others
+table(mt_171$remark,cut_e_a)
+table(mt_171$remark,cut_e_cent)
+```
+
+### CLASSIFICATION
+```{r}
+# An attempt to predict if a student will pass or fail based on their Continuos Assessment scores (i.e tests and quiz)
+# A test set of 730 students scores was used for training. 184 were used for validation
+
+library (caret)
+library (klaR)
+library (MVN)
+
+# Normality of data
+norm = mvn (mt_171 [,c(1:3)], mvnTest = 'mardia')
+
+print (norm) # The variables are not normally distributed
+
+## BINARY CLASSIFICATION
+## LDA
+mt_lda_bin = lda (remark ~ quiz_100 + test1_20 + test2_20, mt_171 [c(1:730), ])
+
+mt_lda_bin_pred = predict (mt_lda_bin, mt_171 [-c(1:730), ])
+
+# Confusion matrix
+mt_lda_bin_conf = confusionMatrix (as.factor (mt_lda_bin_pred$class), reference = as.factor (mt_171 [-c(1:730),]$remark))
+
+print (mt_lda_bin_conf) # 87.5 percent accuracy
+
+## QDA
+mt_qda_bin = qda (remark ~ quiz_100 + test1_20 + test2_20, mt_171 [c(1:730), ])
+
+mt_qda_bin_pred = predict (mt_qda_bin, mt_171 [-c(1:730),])
+
+mt_qda_bin_conf = confusionMatrix (as.factor (mt_qda_bin_pred$class), reference = as.factor (mt_171 [-c(1:730),]$remark))
+
+print (mt_qda_bin_conf) # 89.13 percent accuracy. A bit more than lda
+```
+
+
+```{r}
+## Logistic regression
+
+# logistic regression requires target to be binary, so we change it to 1 for "pass"
+mt_171_copy = data.frame (mt_171)
+mt_171_copy$remark = ifelse (mt_171_copy$remark == 'pass', 1, 0)  #Convert the remark column into binary digits
+
+mt_171_copy$remark = as.factor (mt_171_copy$remark)
+
+# scale quizzes to have same units as tests. This will result to a balanced model
+mt_171_copy$quiz_100 = (mt_171_copy$quiz_100)*0.2
+names (mt_171_copy) [1] = 'quiz_20' # change name of quiz_100 to quiz_20
+
+# Fit the logistic model
+mt_logi_bin = glm (remark ~ quiz_20 + test1_20 + test2_20, mt_171_copy [c(1:730), ], family = 'binomial')
+mt_logi_bin_pred = predict (mt_logi_bin, mt_171_copy [-c(1:730), ], type = 'response')
+summary (mt_logi_bin)
+
+# Convert posterior probabilities to classes
+mt_logi_bin_classes = ifelse (mt_logi_bin_pred >= 0.5, 1, 0) #we use threshold of 0.5
+
+mt_logi_bin_conf= confusionMatrix (as.factor (mt_logi_bin_classes), reference = as.factor (mt_171_copy [-c(1:730),]$remark))
+
+print (mt_logi_bin_conf) # accuracy is the same as qda (89.13%)
+```
+```{r}
+# Multi-Class Classification
+
+# LDA
+mt_lda_mult = lda (grade ~ quiz_100 + test1_20 + test2_20, mt_171 [c(1:730), ]) #now grade is the target
+
+mt_lda_mult_pred = predict (mt_lda_mult, mt_171 [-c(1:730), ])
+
+# Confusion matrix
+mt_lda_mult_conf = confusionMatrix (as.factor (mt_lda_mult_pred$class), reference = as.factor (mt_171 [-c(1:730),]$grade))
+
+print (mt_lda_mult_conf) # 52.17 percent accuracy
+
+# QDA
+mt_qda_mult = qda (grade ~ quiz_100 + test1_20 + test2_20, mt_171 [c(1:730), ])
+
+mt_qda_mult_pred = predict (mt_qda_mult, mt_171 [-c(1:730),])
+
+# Confusion
+mt_qda_mult_conf = confusionMatrix (as.factor (mt_qda_mult_pred$class), reference = as.factor (mt_171 [-c(1:730),]$grade))
+
+print (mt_qda_mult_conf) # 57.61 percent accuracy. A bit more than lda
+
+```
+```{r}
+## Multinomial Logistic regression
+library (nnet)
+
+mt_logi_mult = multinom (grade ~ quiz_20 + test1_20 + test2_20, mt_171_copy [c(1:730), ])
+summary (mt_logi_mult)
+
+mt_logi_mult_pred = predict (mt_logi_mult, mt_171_copy [-c(1:730), ])
+
+mt_logi_mult_conf= confusionMatrix (as.factor (mt_logi_mult_pred), reference = as.factor (mt_171_copy [-c(1:730),]$grade))
+
+print (mt_logi_mult_conf) # 59.78% accuracy. better than lda and qda
+```
